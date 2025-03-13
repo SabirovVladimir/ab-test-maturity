@@ -103,52 +103,50 @@ score_descriptions = {
 }
 
 
-def calculate_maturity(scores):
-    weighted_sum = 0
-    total_weight = sum(category_weights.values())
-    category_scores = {}
+def analyze_scores(scores, category_weights, score_descriptions):
     recommendations = []
-    next_steps = []
-    
-    for category, metrics in score_descriptions.items():
-        category_weight = category_weights.get(category, 0)
-        category_total = 0
-        metric_count = len(metrics)
-        
-        for metric, details in metrics.items():
-            metric_weight = details["weight"]
-            metric_score = scores.get(metric, 0)
-            category_total += metric_score * (metric_weight / 100)
-        
-        category_score = (category_total / metric_count) * category_weight
-        category_scores[category] = category_score
-        weighted_sum += category_score
-    
-    final_score = (weighted_sum / total_weight) * 100
-    sorted_categories = sorted(category_scores.items(), key=lambda x: x[1])
-    weakest_category, weakest_score = sorted_categories[0]
-    
+    category_results = {}
+
+    for category, details in score_descriptions.items():
+        cat_weight = category_weights.get(category, 0)
+        subcategories = details.get('subcategories', {})
+        category_score_total = 0
+
+        for subcategory, sub_details in subcategories.items():
+            sub_weight = sub_details['weight']
+            sub_score = scores.get(subcategory, 0)
+            category_score_total += sub_score * sub_weight / 4  # нормализация до 0-100
+
+        category_results[category] = (category_score_total / sum(
+            subcategories[sub]['weight'] for sub in subcategories
+        )) * cat_weight
+
+    # Определение слабой категории
+    weakest_category = min(category_results, key=category_results.get)
+    weakest_score = category_results[weakest_category]
+
     if weakest_score <= 50:
-        recommendations.append(f"Основной барьер: {weakest_category}. Нужно улучшить этот аспект перед переходом к следующему этапу.")
+        recommendations.append(
+            f"Основной барьер: {weakest_category}. Рекомендуется улучшить данный аспект."
+        )
+
         if weakest_category == "Данные и доверие к ним":
-            recommendations.append("📌 Внедрите систему мониторинга качества данных (Great Expectations, Monte Carlo).")
-            recommendations.append("📌 Проведите аудит источников данных и настройте их верификацию.")
+            recommendations.append("📌 Улучшите качество и доступность данных для принятия решений.")
         elif weakest_category == "Команда и процессы анализа":
-            recommendations.append("📌 Обучите аналитиков методам статистического анализа A/B-тестов.")
-            recommendations.append("📌 Расширьте команду, добавив продуктового аналитика или дата-инженера.")
+            recommendations.append("📌 Укрепите команду аналитиков и внедрите систематизированные процессы.")
         elif weakest_category == "Процессы тестирования":
-            recommendations.append("📌 Разработайте единые стандарты тестирования и систему документации.")
-            recommendations.append("📌 Определите метрики успеха тестов и внедрите их в процессы.")
+            recommendations.append("📌 Увеличьте частоту и системность проведения A/B-тестов.")
         elif weakest_category == "Автоматизация тестирования":
-            recommendations.append("📌 Внедрите feature flags и автоматическое переключение на выигрышные варианты.")
-            recommendations.append("📌 Используйте CI/CD для автоматизированного развертывания A/B-тестов.")
-    
+            recommendations.append("📌 Повышайте уровень автоматизации обработки и анализа данных.")
+
+    sorted_categories = sorted(category_results.items(), key=lambda x: x[1])
+
     if len(sorted_categories) > 1:
         next_category, next_score = sorted_categories[1]
-        if next_score <= 50:
-            next_steps.append(f"🚀 Следующий шаг: После улучшения {weakest_category}, займитесь {next_category}.")
-    
-    return final_score, category_scores, recommendations, next_steps
+        if next_score <= 70:
+            recommendations.append(f"Следующий шаг: После улучшения '{weakest_category}', сосредоточьтесь на '{next_category}'.")
+
+    return category_results, recommendations
 
 
 html_template = """<html><head>
@@ -210,7 +208,7 @@ p {
     color: #222;
     font-weight: 500;
 }
-input[type="radio"] {
+input[type=\"radio\"] {
     accent-color: #FF1493;
 }
 button {
@@ -244,31 +242,31 @@ button:hover {
 }
 </style>
 </head><body>
-<div class="container">
+<div class=\"container\">
     <h1>Оценка зрелости A/B-тестирования. Калькулятор Сабирова Владимира</h1>
     <form action="/" method="post">
-        {% for category, metrics in score_descriptions.items() %}
+        {% for category, details in score_descriptions.items() %}
             <details>
                 <summary>{{ category }}</summary>
-                {% for metric, desc in metrics.items() %}
+                {% for subcategory, subdetails in details['subcategories'].items() %}
                     <details>
-                        <summary class="subcategory">{{ metric }}</summary>
-                        <p>{{ desc["description"] | safe }}</p>
+                        <summary class=\"subcategory\">{{ subcategory }}</summary>
+                        <p>{{ subdetails[\"description\"] | safe }}</p>
+                        {% for level, explanation in subdetails[\"levels\"].items() %}
+                            <input type=\"radio\" name=\"{{ subcategory }}\" value=\"{{ level }}\" required> {{ level }} - {{ explanation }}<br>
+                        {% endfor %}
                     </details>
-                    {% for score, explanation in desc["levels"].items() %}
-                        <input type="radio" name="{{ metric }}" value="{{ score }}" required> {{ score }} - {{ explanation }}<br>
-                    {% endfor %}
                 {% endfor %}
             </details>
         {% endfor %}
-        <button type="submit">Рассчитать</button>
+        <button type=\"submit\">Рассчитать</button>
     </form>
 </div>
-<div class="animation-container">
-    <h1>⚡ "Write clean code," they said. ⚡<br>⚡ "Follow best practices," they said. ⚡<br>⚡ And here we are. ⚡</h1>
+<div class=\"animation-container\">
+    <h1>⚡ \"Write clean code,\" they said. ⚡<br>⚡ \"Follow best practices,\" they said. ⚡<br>⚡ And here we are. ⚡</h1>
 </div>
-<div class="footer">
-    Калькулятор разработан <a href="https://t.me/VladimirSabirov" target="_blank">@VladimirSabirov</a>
+<div class=\"footer\">
+    Калькулятор разработан <a href=\"https://t.me/VladimirSabirov\" target=\"_blank\">@VladimirSabirov</a>
 </div>
 </body></html>"""
 
@@ -277,27 +275,30 @@ async def form():
     template = Template(html_template)
     return HTMLResponse(template.render(score_descriptions=score_descriptions))
 
-@app.post("/calculate", response_class=HTMLResponse)
+@app.post("/", response_class=HTMLResponse)
 async def calculate(request: Request):
     form_data = await request.form()
 
-    # Преобразуем данные формы в числовые значения
     try:
         scores = {metric: int(value) for metric, value in form_data.items()}
     except ValueError:
         return HTMLResponse("<h1>Ошибка!</h1><p>Пожалуйста, выберите значения для всех параметров.</p>")
 
-    final_score, category_scores, recommendations, next_steps = calculate_maturity(scores)
+    category_results, recommendations = analyze_scores(scores, category_weights, score_descriptions)
 
     result_html = """
     <h1>Ваш уровень зрелости A/B-тестирования</h1>
     <h2>Результаты по категориям:</h2>
     <ul>
     """
-    for category, score in category_scores.items():
+    for category, score in category_results.items():
         result_html += f"<li><b>{category}</b>: {score:.2f}%</li>"
     result_html += "</ul>"
-    
-    result_html += f"<h2>Итоговый уровень: {final_score}%</h2>"
-    
+
+    if recommendations:
+        result_html += "<h2>Рекомендации:</h2><ul>"
+        for rec in recommendations:
+            result_html += f"<li>{rec}</li>"
+        result_html += "</ul>"
+
     return HTMLResponse(result_html)
